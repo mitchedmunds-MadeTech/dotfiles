@@ -1,0 +1,96 @@
+{
+  "version": 3,
+  "lines": [
+    [
+      {
+        "id": "1",
+        "type": "model",
+        "color": "cyan"
+      },
+      {
+        "id": "3",
+        "type": "context-length",
+        "color": "brightBlack"
+      },
+      {
+        "id": "5",
+        "type": "git-branch",
+        "color": "magenta"
+      },
+      {
+        "id": "7",
+        "type": "git-changes",
+        "color": "yellow"
+      }
+    ],
+    [
+      {
+        "id": "00e43e4d-4031-4fdc-9552-7f91f9611f61",
+        "type": "tokens-input"
+      },
+      {
+        "id": "36168f3d-8732-4622-a717-ac8549c578f5",
+        "type": "tokens-output"
+      },
+      {
+        "id": "30919456-f1af-40ab-97c1-06bde5332cf7",
+        "type": "tokens-total"
+      },
+      {
+        "id": "bd445a1c-7c2c-4b10-b084-869ff83dbf47",
+        "type": "input-speed"
+      },
+      {
+        "id": "8e618077-0a89-4bff-9836-4718cb45d2d2",
+        "type": "output-speed"
+      },
+      {
+        "id": "9de2ce98-1bfc-4b6a-90a0-8feadcd3c4ec",
+        "type": "total-speed"
+      },
+      {
+        "id": "23ac83d6-ec03-4e1f-92cd-91ac9db14352",
+        "type": "context-window"
+      },
+      {
+        "id": "976f8603-0d32-48a5-a91a-08da837e276d",
+        "type": "compaction-counter"
+      }
+    ],
+    [
+      {
+        "id": "9a3bdeb4-a2ae-479a-a5d2-12a3a8368c24",
+        "type": "session-cost"
+      },
+      {
+        "id": "05b8f15a-b8fe-4b10-80e6-2c49d1d0c6ad",
+        "type": "session-usage"
+      }
+    ]
+  ],
+  "flexMode": "full-minus-40",
+  "compactThreshold": 60,
+  "colorLevel": 2,
+  "inheritSeparatorColors": false,
+  "globalBold": false,
+  "minimalistMode": false,
+  "powerline": {
+    "enabled": true,
+    "separators": [
+      ""
+    ],
+    "separatorInvertBackground": [
+      true
+    ],
+    "startCaps": [
+      ""
+    ],
+    "endCaps": [
+      ""
+    ],
+    "autoAlign": false,
+    "continueThemeAcrossLines": false,
+    "theme": "nord-aurora"
+  },
+  "defaultPadding": " "
+}

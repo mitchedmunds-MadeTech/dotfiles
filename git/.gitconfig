@@ -1,0 +1,82 @@
+[includeIf "gitdir:~/git-worktrees/work/"]
+    path = "~/.config/git/mitchedmunds-MadeTech.config"
+
+[includeIf "gitdir:~/git-worktrees/mitches-got-glitches/"]
+    path = "~/.config/git/mitches-got-glitches.config"
+
+[core]
+	excludesFile = ~/.gitignore
+
+[init]
+	defaultBranch = main
+
+[alias]
+	co = checkout
+	cob = checkout -b
+	coo = !git fetch && git checkout
+	br = branch
+	brd = branch -d
+	brD = branch -D
+	merged = branch --merged
+	st = status -sb
+	aa = add -A .
+	cm = commit
+	aacm = !git add -A . && git commit
+	cp = cherry-pick
+	amend = commit --amend
+	master = !git checkout master && git pull origin
+	po = push origin
+	pu = !git push origin `git branch --show-current`
+	pom = push origin master
+	poh = push origin HEAD
+	pogm = !git push origin gh-pages && git checkout master && git pull origin master && git rebase gh-pages && git push origin master && git checkout gh-pages
+	pomg = !git push origin master && git checkout gh-pages && git pull origin gh-pages && git rebase master && git push origin gh-pages && git checkout master
+	plo = pull origin
+	plom = pull origin master
+	ploh = pull origin HEAD
+	unstage = reset --soft HEAD^
+	lp = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
+	ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
+	f = "!git ls-files | grep -i"
+	gr = grep -Ii
+	la = "!git config -l | grep alias | cut -c 7-"
+        # list branches sorted by last modified
+        b = "!git for-each-ref --sort='-authordate' --format='%(authordate)%09%(objectname:short)%09%(refname)' refs/heads | sed -e 's-refs/heads/--'"
+	assume = update-index --assume-unchanged
+	unassume = update-index --no-assume-unchanged
+	assumed = "!git ls-files -v | grep ^h | cut -c 3-"
+	unassumeall = "!git assumed | xargs git update-index --no-assume-unchanged"
+	assumeall = "!git st -s | awk {'print $2'} | xargs git assume"
+	lt = describe --tags --abbrev=0
+	r = reset
+	r1 = reset HEAD^
+	r2 = reset HEAD^^
+	rh = reset --hard
+	rh1 = reset HEAD^ --hard
+	rh2 = reset HEAD^^ --hard
+	sl = stash list
+	spu = stash push -m
+	spo = stash pop
+	last = log -1 --stat
+	cl = clone
+	d = diff
+	dc = diff --cached
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %Cblue<%an>%Creset' --abbrev-commit --date=relative --all
+	fix-commit = commit --edit --file=.git/COMMIT_EDITMSG
+    # List local branches whose changes are present in <target> (default: origin's HEAD).
+    # Catches rebase-merges and squash-merges, not just fast-forwards.
+    gone = "!f() { \
+        target=\"${1:-$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)}\"; \
+        current=$(git symbolic-ref --short HEAD 2>/dev/null); \
+        protected=\"$current ${target#*/} $(git config --get-all gone.protect 2>/dev/null | tr '\\n' ' ')\"; \
+        git for-each-ref --format='%(refname:short)' refs/heads/ | while read b; do \
+            case \" $protected \" in *\" $b \"*) continue;; esac; \
+            mb=$(git merge-base \"$target\" \"$b\" 2>/dev/null) || continue; \
+            if [ \"$(git rev-parse \"$b\")\" = \"$mb\" ]; then echo \"$b\"; continue; fi; \
+            tree=$(git rev-parse \"$b^{tree}\"); \
+            tmp=$(git commit-tree \"$tree\" -p \"$mb\" -m _); \
+            case \"$(git cherry \"$target\" \"$tmp\")\" in -*) echo \"$b\";; esac; \
+        done; \
+    }; f"
+    # Delete every branch `gone` lists. Pass a target as $1 to override.
+    prune-gone = "!f() { git gone \"$@\" | xargs -r git branch -D; }; f"

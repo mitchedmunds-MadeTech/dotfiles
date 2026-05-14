@@ -1,0 +1,25 @@
+{
+  "env": {
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1"
+  },
+  "extraKnownMarketplaces": {
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    },
+    "astral-sh": {
+      "source": {
+        "source": "github",
+        "repo": "astral-sh/claude-code-plugins"
+      }
+    }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0,
+    "refreshInterval": 10
+  }
+}
