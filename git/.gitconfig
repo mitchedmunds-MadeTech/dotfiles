@@ -1,6 +1,12 @@
 [includeIf "gitdir:~/git-worktrees/work/"]
     path = "~/.config/git/mitchedmunds-MadeTech.config"
 
+[includeIf "gitdir:/workspaces/"]
+    path = "~/.config/git/mitchedmunds-MadeTech.config"
+
+[includeIf "gitdir:~/dotfiles/"]
+    path = "~/.config/git/mitchedmunds-MadeTech.config"
+
 [includeIf "gitdir:~/git-worktrees/mitches-got-glitches/"]
     path = "~/.config/git/mitches-got-glitches.config"
 

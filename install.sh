@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGES=(git zsh claude ccstatusline ohmyposh vim)
+PACKAGES=(git zsh ssh claude ccstatusline ohmyposh vim)
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 OS="$(uname -s)"
 
