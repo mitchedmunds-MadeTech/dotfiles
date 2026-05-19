@@ -43,20 +43,27 @@ gwt-rm() {
 # Internal helper: lists local branches whose upstream is [gone], excluding
 # protected names (main, master, develop) and the current branch.
 _gwt_gone() {
-    local current
+    local current branch upstream
     current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
-    git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/ 2>/dev/null \
-        | awk -v cur="$current" '
-            $2 == "[gone]" && $1 != cur && $1 != "main" && $1 != "master" && $1 != "develop" { print $1 }
-        '
+    while IFS=' ' read -r branch upstream; do
+        [ "$upstream" = "[gone]" ] || continue
+        case "$branch" in main|master|develop) continue ;; esac
+        [ "$branch" = "$current" ] && continue
+        printf '%s\n' "$branch"
+    done < <(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/ 2>/dev/null)
 }
 
 # Internal helper: prints the worktree path for a branch (empty if none).
+# Uses `wt_path` rather than `path`: in zsh, `path` is the array form of
+# `$PATH`, and `local path` clobbers it for the function's scope.
 _gwt_path_of() {
-    git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$1" '
-        /^worktree / { p = substr($0, 10) }
-        $0 == "branch " b { print p }
-    '
+    local target="refs/heads/$1" wt_path="" line
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*) wt_path="${line#worktree }" ;;
+            "branch $target") printf '%s\n' "$wt_path"; return 0 ;;
+        esac
+    done < <(git worktree list --porcelain 2>/dev/null)
 }
 
 # Remove worktrees and local branches whose upstream has been deleted on the
@@ -86,25 +93,25 @@ gwt-prune() {
         return 0
     fi
 
-    local current_wt branch path
+    local current_wt branch wt_path
     current_wt=$(git rev-parse --show-toplevel 2>/dev/null || true)
 
     printf '%s\n' "$branches" | while IFS= read -r branch; do
         [ -z "$branch" ] && continue
-        path=$(_gwt_path_of "$branch")
-        if [ -n "$path" ] && [ "$path" = "$current_wt" ]; then
+        wt_path=$(_gwt_path_of "$branch")
+        if [ -n "$wt_path" ] && [ "$wt_path" = "$current_wt" ]; then
             echo "  [skip] $branch — checked out in the current worktree"
             continue
         fi
         if [ "$force" -eq 0 ]; then
-            [ -n "$path" ] && echo "  would remove worktree: $path"
+            [ -n "$wt_path" ] && echo "  would remove worktree: $wt_path"
             echo "  would delete branch:   $branch"
         else
-            if [ -n "$path" ]; then
-                if git worktree remove "$path"; then
-                    echo "  removed worktree: $path"
+            if [ -n "$wt_path" ]; then
+                if git worktree remove "$wt_path"; then
+                    echo "  removed worktree: $wt_path"
                 else
-                    echo "  failed to remove worktree $path (uncommitted changes? re-run 'git worktree remove --force $path' manually)" >&2
+                    echo "  failed to remove worktree $wt_path (uncommitted changes? re-run 'git worktree remove --force $wt_path' manually)" >&2
                     continue
                 fi
             fi
