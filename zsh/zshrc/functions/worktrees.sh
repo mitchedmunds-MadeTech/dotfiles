@@ -40,6 +40,85 @@ gwt-rm() {
     git worktree remove "${dir}/$1" "${@:2}"
 }
 
+# Internal helper: lists local branches whose upstream is [gone], excluding
+# protected names (main, master, develop) and the current branch.
+_gwt_gone() {
+    local current
+    current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads/ 2>/dev/null \
+        | awk -v cur="$current" '
+            $2 == "[gone]" && $1 != cur && $1 != "main" && $1 != "master" && $1 != "develop" { print $1 }
+        '
+}
+
+# Internal helper: prints the worktree path for a branch (empty if none).
+_gwt_path_of() {
+    git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$1" '
+        /^worktree / { p = substr($0, 10) }
+        $0 == "branch " b { print p }
+    '
+}
+
+# Remove worktrees and local branches whose upstream has been deleted on the
+# remote (typical after a rebase-merge + branch delete on GitHub). Dry-run by
+# default — pass --force (or -f) to actually remove. --no-fetch skips the
+# initial `git fetch --prune`.
+gwt-prune() {
+    local force=0 fetch=1 a
+    for a in "$@"; do
+        case "$a" in
+            -f|--force) force=1 ;;
+            --no-fetch) fetch=0 ;;
+            -h|--help)
+                echo "Usage: gwt-prune [--force|-f] [--no-fetch]" >&2
+                return 0 ;;
+            *) echo "gwt-prune: unknown arg '$a'" >&2; return 1 ;;
+        esac
+    done
+
+    git rev-parse --git-dir >/dev/null 2>&1 || { echo "Not inside a git repository" >&2; return 1; }
+    [ "$fetch" -eq 1 ] && git fetch --prune --quiet
+
+    local branches
+    branches=$(_gwt_gone)
+    if [ -z "$branches" ]; then
+        echo "No gone branches. Nothing to prune."
+        return 0
+    fi
+
+    local current_wt branch path
+    current_wt=$(git rev-parse --show-toplevel 2>/dev/null || true)
+
+    printf '%s\n' "$branches" | while IFS= read -r branch; do
+        [ -z "$branch" ] && continue
+        path=$(_gwt_path_of "$branch")
+        if [ -n "$path" ] && [ "$path" = "$current_wt" ]; then
+            echo "  [skip] $branch — checked out in the current worktree"
+            continue
+        fi
+        if [ "$force" -eq 0 ]; then
+            [ -n "$path" ] && echo "  would remove worktree: $path"
+            echo "  would delete branch:   $branch"
+        else
+            if [ -n "$path" ]; then
+                if git worktree remove "$path"; then
+                    echo "  removed worktree: $path"
+                else
+                    echo "  failed to remove worktree $path (uncommitted changes? re-run 'git worktree remove --force $path' manually)" >&2
+                    continue
+                fi
+            fi
+            if git branch -D "$branch" >/dev/null; then
+                echo "  deleted branch:   $branch"
+            else
+                echo "  failed to delete branch: $branch" >&2
+            fi
+        fi
+    done
+
+    [ "$force" -eq 0 ] && { echo ""; echo "(dry run — re-run with --force to actually delete)"; }
+}
+
 # --- Completion ---
 
 _gwt_rm_complete() {
@@ -58,5 +137,10 @@ _gwt_add_complete() {
         COMPREPLY=()
     fi
 }
+_gwt_prune_complete() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=( $(compgen -W "--force --no-fetch --help" -- "$cur") )
+}
 complete -F _gwt_add_complete gwt-add
 complete -F _gwt_rm_complete gwt-rm
+complete -F _gwt_prune_complete gwt-prune
