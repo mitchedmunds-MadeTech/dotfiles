@@ -20,16 +20,35 @@ gwt-ls() {
 }
 
 gwt-add() {
-    [ -z "$1" ] && { echo "Usage: gwt-add <worktree-name> [branch-name]" >&2; return 1; }
-    local dir worktree_path branch
+    [ -z "$1" ] && { echo "Usage: gwt-add <worktree-name> [branch-name] [--no-sync]" >&2; return 1; }
+    local dir worktree_path branch sync=1 a
+    local args=()
+    for a in "$@"; do
+        case "$a" in
+            --no-sync) sync=0 ;;
+            *) args+=("$a") ;;
+        esac
+    done
+    set -- "${args[@]}"
     dir=$(_gwt_dir) || { echo "Not inside a git repository" >&2; return 1; }
     worktree_path="${dir}/$1"
     branch="${2:-$1}"
     mkdir -p "$dir"
     if git show-ref --verify --quiet "refs/heads/${branch}"; then
-        git worktree add "$worktree_path" "$branch"
+        git worktree add "$worktree_path" "$branch" || return $?
     else
-        git worktree add -b "$branch" "$worktree_path"
+        git worktree add -b "$branch" "$worktree_path" || return $?
+    fi
+    # uv-managed Python projects need a venv for ty / pytest / etc. hooks to
+    # find packages. Sync it now so the first pre-commit or pre-push in the
+    # new worktree doesn't fail with unresolved-import errors. Opt out with
+    # --no-sync.
+    if [ "$sync" -eq 1 ] \
+        && [ -f "$worktree_path/pyproject.toml" ] \
+        && [ -f "$worktree_path/uv.lock" ] \
+        && command -v uv >/dev/null 2>&1; then
+        echo "→ uv sync ($1)"
+        (cd "$worktree_path" && uv sync) || echo "uv sync failed — venv not ready" >&2
     fi
 }
 
