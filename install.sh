@@ -36,6 +36,8 @@ ensure_tool() {
 }
 
 install_atuin() {
+    # Opt-in: re-enable with `INSTALL_ATUIN=1 ./install.sh`.
+    [ "${INSTALL_ATUIN:-0}" = "1" ] || return
     if have atuin; then return; fi
     case "$OS" in
         Darwin) brew install atuin ;;
