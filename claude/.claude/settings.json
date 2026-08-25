@@ -2,6 +2,41 @@
   "env": {
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1"
   },
+  "permissions": {
+    "allow": [
+      "Write(//tmp/**)",
+      "Edit(//tmp/**)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git fetch*)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(gh project *)",
+      "Bash(gh label *)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)",
+      "Bash(rm -rf .git*)",
+      "Bash(sudo *)"
+    ],
+    "additionalDirectories": [
+      "~/git-worktrees"
+    ]
+  },
+  "model": "opus[1m]",
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0,
+    "refreshInterval": 10
+  },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
       "source": {
@@ -16,10 +51,5 @@
       }
     }
   },
-  "statusLine": {
-    "type": "command",
-    "command": "npx -y ccstatusline@latest",
-    "padding": 0,
-    "refreshInterval": 10
-  }
+  "tui": "fullscreen"
 }
