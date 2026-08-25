@@ -6,6 +6,8 @@
     "allow": [
       "Write(//tmp/**)",
       "Edit(//tmp/**)",
+      "Write(~/standup/**)",
+      "Edit(~/standup/**)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
@@ -27,7 +29,8 @@
       "Bash(sudo *)"
     ],
     "additionalDirectories": [
-      "~/git-worktrees"
+      "~/git-worktrees",
+      "~/standup"
     ]
   },
   "model": "opus[1m]",
