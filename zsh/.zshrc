@@ -13,3 +13,6 @@ unset LESS;
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# mise: per-directory tool versions from mise.toml, ~/.config/mise as the default
+[[ -x /opt/homebrew/bin/mise ]] && eval "$(/opt/homebrew/bin/mise activate zsh)"
