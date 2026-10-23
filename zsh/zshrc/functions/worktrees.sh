@@ -19,6 +19,31 @@ gwt-ls() {
     '
 }
 
+# Internal helper: seeds a new worktree's pytest-testmon database from the
+# most recently run one among the other worktrees, so its first push does not
+# run the whole suite (long enough for GitHub to drop the idle push connection).
+# A stale copy only makes testmon rerun more tests, since it compares each
+# test's code fingerprints. sqlite3 .backup rather than cp: testmon keeps recent
+# writes in a -wal file beside the database, and a run may be writing to it.
+_gwt_seed_testmon() {
+    local dest="$1" newest="" wt_path line
+    [ -e "$dest/.testmondata" ] && return 0
+    command -v sqlite3 >/dev/null 2>&1 || return 0
+    while IFS= read -r line; do
+        case "$line" in "worktree "*) ;; *) continue ;; esac
+        wt_path="${line#worktree }"
+        [ "$wt_path" = "$dest" ] && continue
+        [ -f "$wt_path/.testmondata" ] || continue
+        if [ -z "$newest" ] || [ "$wt_path/.testmondata" -nt "$newest" ]; then
+            newest="$wt_path/.testmondata"
+        fi
+    done < <(git worktree list --porcelain 2>/dev/null)
+    [ -n "$newest" ] || return 0
+    echo "→ testmon database from ${newest%/.testmondata}"
+    sqlite3 "$newest" ".backup '$dest/.testmondata'" \
+        || echo "testmon seed failed — first push runs the whole suite" >&2
+}
+
 gwt-add() {
     [ -z "$1" ] && { echo "Usage: gwt-add <worktree-name> [branch-name] [--no-sync]" >&2; return 1; }
     local dir worktree_path branch sync=1 a
@@ -50,6 +75,7 @@ gwt-add() {
         echo "→ uv sync ($1)"
         (cd "$worktree_path" && uv sync) || echo "uv sync failed — venv not ready" >&2
     fi
+    _gwt_seed_testmon "$worktree_path"
 }
 
 gwt-rm() {
