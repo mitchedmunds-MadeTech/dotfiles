@@ -2,6 +2,10 @@
 [[ -x /usr/libexec/java_home ]] && export JAVA_HOME=$(/usr/libexec/java_home)
 [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
 
+# Caps pytest-xdist's `-n auto` (10 workers here) so several sessions running
+# pytest at once share the cores and memory rather than oversubscribing them.
+export PYTEST_XDIST_AUTO_NUM_WORKERS=4
+
 # macOS /etc/zprofile runs path_helper, which rebuilds PATH with the /etc/paths
 # directories first and everything already present pushed behind them. ~/.profile
 # has added ~/.local/bin by then, so uv's env script finds it present and leaves
