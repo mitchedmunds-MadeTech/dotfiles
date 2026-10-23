@@ -23,12 +23,14 @@ gwt-ls() {
 # most recently run one among the other worktrees, so its first push does not
 # run the whole suite (long enough for GitHub to drop the idle push connection).
 # A stale copy only makes testmon rerun more tests, since it compares each
-# test's code fingerprints. sqlite3 .backup rather than cp: testmon keeps recent
-# writes in a -wal file beside the database, and a run may be writing to it.
+# test's code fingerprints. SQLite's backup API rather than cp: testmon keeps
+# recent writes in a -wal file beside the database, and a run may be writing to
+# it. Python's stdlib sqlite3 through uv, since the sqlite3 CLI is not on every
+# machine (the Dev Container has none) and uv is already required.
 _gwt_seed_testmon() {
     local dest="$1" newest="" wt_path line
     [ -e "$dest/.testmondata" ] && return 0
-    command -v sqlite3 >/dev/null 2>&1 || return 0
+    command -v uv >/dev/null 2>&1 || return 0
     while IFS= read -r line; do
         case "$line" in "worktree "*) ;; *) continue ;; esac
         wt_path="${line#worktree }"
@@ -40,7 +42,13 @@ _gwt_seed_testmon() {
     done < <(git worktree list --porcelain 2>/dev/null)
     [ -n "$newest" ] || return 0
     echo "→ testmon database from ${newest%/.testmondata}"
-    sqlite3 "$newest" ".backup '$dest/.testmondata'" \
+    uv run --no-project python -c '
+import sqlite3, sys
+src, dst = sqlite3.connect(sys.argv[1]), sqlite3.connect(sys.argv[2])
+src.backup(dst)
+dst.close()
+src.close()
+' "$newest" "$dest/.testmondata" \
         || echo "testmon seed failed — first push runs the whole suite" >&2
 }
 
