@@ -72,6 +72,17 @@ gwt-add() {
     else
         git worktree add -b "$branch" "$worktree_path" || return $?
     fi
+    if [ "$sync" -eq 0 ]; then
+        _gwt_seed_testmon "$worktree_path"
+        return 0
+    fi
+    # A repo that ships its own setup recipe knows its steps best.
+    if command -v just >/dev/null 2>&1 \
+        && just --justfile "$worktree_path/justfile" --show worktree-setup >/dev/null 2>&1; then
+        echo "→ just worktree-setup ($1)"
+        (cd "$worktree_path" && just worktree-setup) || echo "just worktree-setup failed" >&2
+        return 0
+    fi
     # uv-managed Python projects need a venv for ty / pytest / etc. hooks to
     # find packages. Sync it now so the first pre-commit or pre-push in the
     # new worktree doesn't fail with unresolved-import errors. Opt out with
