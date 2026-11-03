@@ -130,10 +130,64 @@ _gwt_path_of() {
     done < <(git worktree list --porcelain 2>/dev/null)
 }
 
-# Remove worktrees and local branches whose upstream has been deleted on the
-# remote (typical after a rebase-merge + branch delete on GitHub). Dry-run by
-# default — pass --force (or -f) to actually remove. --no-fetch skips the
-# initial `git fetch --prune`.
+# Internal helper: prints every PR of the current repo's GitHub remote as
+# "<head branch>\t<state>\t<head sha>", or fails when gh is missing, not
+# logged in, or cannot reach GitHub.
+_gwt_prs() {
+    command -v gh >/dev/null 2>&1 || return 1
+    gh pr list --state all --limit 5000 --json headRefName,state,headRefOid \
+        --jq '.[] | "\(.headRefName)\t\(.state)\t\(.headRefOid)"' 2>/dev/null
+}
+
+# Internal helper: lists local branches whose PR merged and whose tip is that
+# PR's head commit or an ancestor of it, so nothing committed after the merge
+# is lost. Matching on the head commit rather than on commits missing from
+# main is the point: a rebase-merge re-hashes every commit, so a merged
+# branch still looks unmerged to `git branch --merged` and `git cherry`. It
+# also catches branches gwt-prune's [gone] check misses: never pushed with
+# -u, remote branch not deleted, or tracking origin/main because the branch
+# was created with `git branch <name> origin/main`.
+_gwt_merged() {
+    local prs="$1" current branch tip oid
+    current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    while IFS= read -r branch; do
+        case "$branch" in main|master|develop) continue ;; esac
+        [ "$branch" = "$current" ] && continue
+        tip=$(git rev-parse --verify --quiet "refs/heads/$branch") || continue
+        while IFS= read -r oid; do
+            [ -z "$oid" ] && continue
+            if [ "$tip" = "$oid" ] \
+                || { git cat-file -e "${oid}^{commit}" 2>/dev/null \
+                     && git merge-base --is-ancestor "$tip" "$oid" 2>/dev/null; }; then
+                printf '%s\n' "$branch"
+                break
+            fi
+        done < <(awk -F'\t' -v b="$branch" '$1 == b && $2 == "MERGED" { print $3 }' <<<"$prs")
+    done < <(git for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null)
+}
+
+# Internal helper: the state of a branch's PR, preferring an open one when a
+# branch name has been reused, or "none".
+_gwt_pr_state() {
+    awk -F'\t' -v b="$2" '
+        $1 == b { seen[$2] = 1 }
+        END {
+            if ("OPEN" in seen) print "OPEN"
+            else if ("MERGED" in seen) print "MERGED"
+            else if ("CLOSED" in seen) print "CLOSED"
+            else print "none"
+        }' <<<"$1"
+}
+
+# Remove worktrees and local branches that are finished with: those whose
+# upstream has been deleted on the remote ([gone], typical after a
+# rebase-merge and branch delete on GitHub), and, when gh is available, those
+# whose PR merged with this exact tip. A worktree with uncommitted changes is
+# never removed. Then lists the worktrees left alone that may need a look:
+# uncommitted changes, a closed PR, no PR, or a detached HEAD.
+#
+# Dry-run by default — pass --force (or -f) to actually remove. --no-fetch
+# skips the initial `git fetch --prune`.
 gwt-prune() {
     local force=0 fetch=1 a
     for a in "$@"; do
@@ -150,23 +204,38 @@ gwt-prune() {
     git rev-parse --git-dir >/dev/null 2>&1 || { echo "Not inside a git repository" >&2; return 1; }
     [ "$fetch" -eq 1 ] && git fetch --prune --quiet
 
-    local branches
-    branches=$(_gwt_gone)
-    if [ -z "$branches" ]; then
-        echo "No gone branches. Nothing to prune."
-        return 0
+    local prs="" have_prs=0
+    if prs=$(_gwt_prs) && [ -n "$prs" ]; then
+        have_prs=1
+    else
+        echo "(gh unavailable — checking [gone] upstreams only)"
     fi
 
-    local current_wt branch wt_path
-    current_wt=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    local branches
+    branches=$( { _gwt_gone; [ "$have_prs" -eq 1 ] && _gwt_merged "$prs"; } | awk '!seen[$0]++')
 
-    printf '%s\n' "$branches" | while IFS= read -r branch; do
+    local current_wt main_wt branch wt_path dirty pruned=""
+    current_wt=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    main_wt=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+
+    if [ -z "$branches" ]; then
+        echo "Nothing to prune."
+    fi
+    while IFS= read -r branch; do
         [ -z "$branch" ] && continue
         wt_path=$(_gwt_path_of "$branch")
         if [ -n "$wt_path" ] && [ "$wt_path" = "$current_wt" ]; then
             echo "  [skip] $branch — checked out in the current worktree"
             continue
         fi
+        if [ -n "$wt_path" ]; then
+            dirty=$(git -C "$wt_path" status --porcelain 2>/dev/null)
+            if [ -n "$dirty" ]; then
+                echo "  [skip] $branch — finished, but its worktree has uncommitted changes (listed below)"
+                continue
+            fi
+        fi
+        pruned="${pruned}${branch}"$'\n'
         if [ "$force" -eq 0 ]; then
             [ -n "$wt_path" ] && echo "  would remove worktree: $wt_path"
             echo "  would delete branch:   $branch"
@@ -175,7 +244,7 @@ gwt-prune() {
                 if git worktree remove "$wt_path"; then
                     echo "  removed worktree: $wt_path"
                 else
-                    echo "  failed to remove worktree $wt_path (uncommitted changes? re-run 'git worktree remove --force $wt_path' manually)" >&2
+                    echo "  failed to remove worktree $wt_path" >&2
                     continue
                 fi
             fi
@@ -185,9 +254,50 @@ gwt-prune() {
                 echo "  failed to delete branch: $branch" >&2
             fi
         fi
-    done
+    done <<<"$branches"
 
     [ "$force" -eq 0 ] && { echo ""; echo "(dry run — re-run with --force to actually delete)"; }
+
+    # Worktrees left alone. An open PR is active work and is not listed.
+    local line state age label header=0
+    wt_path="" branch=""
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*) wt_path="${line#worktree }"; branch="" ;;
+            "branch refs/heads/"*) branch="${line#branch refs/heads/}" ;;
+            "detached") branch="(detached)" ;;
+            "")
+                if [ -n "$wt_path" ] && [ "$wt_path" != "$main_wt" ] && [ -d "$wt_path" ] \
+                    && ! printf '%s' "$pruned" | grep -qxF -- "$branch"; then
+                    dirty=$(git -C "$wt_path" status --porcelain 2>/dev/null)
+                    if [ "$branch" = "(detached)" ]; then
+                        label="detached"
+                    elif [ "$have_prs" -eq 1 ]; then
+                        state=$(_gwt_pr_state "$prs" "$branch")
+                        case "$state" in
+                            OPEN) label="" ;;
+                            MERGED) label="merged, tip differs" ;;
+                            CLOSED) label="PR closed" ;;
+                            *) label="no PR" ;;
+                        esac
+                    else
+                        label=""
+                    fi
+                    [ -n "$dirty" ] && label="${label:+$label, }uncommitted changes"
+                    if [ -n "$label" ]; then
+                        if [ "$header" -eq 0 ]; then
+                            echo ""
+                            echo "Left alone — check these:"
+                            header=1
+                        fi
+                        age=$(git -C "$wt_path" log -1 --format=%cr 2>/dev/null)
+                        printf '  %-46s %-14s %s\n' "[$label]" "$age" "${wt_path##*/}"
+                        [ -n "$dirty" ] && printf '%s\n' "$dirty" | head -3 | sed 's/^/      /'
+                    fi
+                fi
+                wt_path="" branch="" ;;
+        esac
+    done < <(git worktree list --porcelain 2>/dev/null; echo)
 }
 
 # --- Completion ---
