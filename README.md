@@ -13,6 +13,7 @@ cd ~/dotfiles
 ./install.sh               # Claude config linked only if Claude Code is installed
 ./install.sh --claude      # always link the Claude Code + ccstatusline config
 ./install.sh --no-claude   # never link it (or DOTFILES_CLAUDE=0)
+./install.sh --uninstall [package...]   # remove the links: all, or just those packages
 ```
 
 Needs only bash, `find` and (for oh-my-posh on Linux) `curl`: no sudo, no
@@ -20,6 +21,8 @@ GNU stow, no package manager. It creates `~/.local/bin`, installs oh-my-posh if
 missing (brew on macOS, the official installer into `~/.local/bin` on Linux;
 a failure is a warning, not fatal), moves any file in the way to
 `~/.dotfiles-backup-<timestamp>/`, and links each package. Re-running it is safe.
+`--uninstall` removes only links that point into this repo and restores
+nothing; the files they replaced are in those backup directories.
 Atuin is opt-in: `INSTALL_ATUIN=1 ./install.sh`.
 
 ## Layout
@@ -91,8 +94,7 @@ sync (`atuin login` + `atuin sync`) for cross-machine sync.
 - **claude**: only `settings.json` is tracked. Skills and slash commands come
   from Claude Code's plugin marketplaces (configured in
   `extraKnownMarketplaces`) or separate repos under `~/.agents/`. To remove it
-  from a machine, delete `~/.claude/settings.json` and
-  `~/.config/ccstatusline/settings.json`.
+  from a machine, run `./install.sh --uninstall claude ccstatusline`.
 - **ccstatusline**: picked up by Claude Code via the `statusLine` block in
   `claude/.claude/settings.json`; the first run fetches it with `npx`.
 - **atuin**: initialised from `shell/.config/shell/atuin.sh` with

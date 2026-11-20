@@ -4,6 +4,9 @@
 #   ./install.sh               core packages; Claude ones only if Claude Code is present
 #   ./install.sh --claude      also link the Claude Code + ccstatusline config
 #   ./install.sh --no-claude   never link them
+#   ./install.sh --uninstall [package...]
+#                              remove the links (all packages, or those named);
+#                              replaced files stay in ~/.dotfiles-backup-*
 #
 # Works on macOS and Linux (apt, dnf, yum or none) with no sudo and no GNU stow:
 # every file is linked individually, so directories such as ~/.ssh or ~/.claude
@@ -18,21 +21,56 @@ CLAUDE_PACKAGES="claude ccstatusline"
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 OS="$(uname -s)"
 CLAUDE="${DOTFILES_CLAUDE:-auto}"
+UNINSTALL=0
+UNINSTALL_PACKAGES=""
 
 log()  { printf '[dotfiles] %s\n' "$*"; }
 warn() { printf '[dotfiles] warning: %s\n' "$*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
 
 for arg in "$@"; do
     case "$arg" in
         --claude)    CLAUDE=1 ;;
         --no-claude) CLAUDE=0 ;;
+        --uninstall) UNINSTALL=1 ;;
         -h|--help)   usage; exit 0 ;;
-        *) warn "unknown argument: $arg"; usage; exit 1 ;;
+        -*) warn "unknown argument: $arg"; usage; exit 1 ;;
+        *)
+            if [ "$UNINSTALL" = 1 ] && [ -d "$DOTFILES_DIR/$arg" ]; then
+                UNINSTALL_PACKAGES="$UNINSTALL_PACKAGES $arg"
+            else
+                warn "unknown argument: $arg"; usage; exit 1
+            fi
+            ;;
     esac
 done
+
+# Remove each link in $HOME that points at one of a package's files. Links
+# made by older stow-based versions (relative paths) count too. Real files and
+# links pointing anywhere else are left alone, and nothing is restored.
+unlink_package() {
+    local pkg="$1" src rel target
+    while IFS= read -r -d '' src; do
+        rel="${src#"$DOTFILES_DIR/$pkg/"}"
+        target="$HOME/$rel"
+        if [ -L "$target" ] && [ "$target" -ef "$src" ]; then
+            rm "$target"
+            log "removed ~/$rel"
+        fi
+    done < <(find "$DOTFILES_DIR/$pkg" -type f ! -name .DS_Store -print0)
+}
+
+if [ "$UNINSTALL" = 1 ]; then
+    for pkg in ${UNINSTALL_PACKAGES:-$CORE_PACKAGES $CLAUDE_PACKAGES}; do
+        unlink_package "$pkg"
+    done
+    # Directories only these links lived in.
+    [ -d "$HOME/.config/shell" ] && find "$HOME/.config/shell" -depth -type d -empty -exec rmdir {} \;
+    log "Done. Backups of the files these links replaced are in ~/.dotfiles-backup-*"
+    exit 0
+fi
 
 if [ "$CLAUDE" = "auto" ]; then
     if have claude || [ -d "$HOME/.claude" ]; then CLAUDE=1; else CLAUDE=0; fi
