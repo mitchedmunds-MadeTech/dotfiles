@@ -13,7 +13,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CORE_PACKAGES="git zsh ssh vim ohmyposh"
+CORE_PACKAGES="shell zsh bash git ssh vim ohmyposh"
 CLAUDE_PACKAGES="claude ccstatusline"
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 OS="$(uname -s)"
@@ -87,6 +87,17 @@ link_package() {
     done < <(find "$DOTFILES_DIR/$pkg" -type f ! -name .DS_Store -print0)
 }
 
+# Earlier versions linked the zsh snippets into ~/zshrc/. Drop those links
+# once they dangle, and the directory if nothing else is in it.
+remove_legacy_links() {
+    local link
+    [ -d "$HOME/zshrc" ] || return 0
+    while IFS= read -r -d '' link; do
+        [ -e "$link" ] || rm "$link"
+    done < <(find "$HOME/zshrc" -type l -print0)
+    find "$HOME/zshrc" -depth -type d -empty -exec rmdir {} \; 2>/dev/null || true
+}
+
 mkdir -p "$HOME/.local/bin"
 install_oh_my_posh || warn "oh-my-posh not installed; the prompt falls back to the default"
 install_atuin || warn "atuin not installed"
@@ -95,6 +106,7 @@ log "Linking: $PACKAGES"
 for pkg in $PACKAGES; do
     link_package "$pkg"
 done
+remove_legacy_links
 chmod 700 "$HOME/.ssh" 2>/dev/null || true
 
 [ -d "$BACKUP_DIR" ] && log "Replaced files are in $BACKUP_DIR"

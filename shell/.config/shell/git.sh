@@ -12,7 +12,6 @@ alias gcsmsg='SKIP=prepare_commit_msg git commit'
 alias gd='git diff'
 alias gds='git diff --staged'
 alias gco='git checkout'
-compdef _git gco=git-checkout
 alias gcb='git checkout -b'
 alias gr='git restore'
 alias grs='git restore --staged'
@@ -29,5 +28,9 @@ alias remove_hooks='pre-commit uninstall; pre-commit uninstall --hook-type prepa
 alias gsync='git fetch upstream;git rebase upstream/main'
 alias gmm='git fetch origin;git merge origin/main'
 
-# Git worktree aliases
-# alias gcbwt='git
+# Complete `gco` like `git checkout`.
+if [ "$DOTFILES_SHELL" = zsh ]; then
+    compdef _git gco=git-checkout
+elif command -v __git_complete >/dev/null 2>&1; then
+    __git_complete gco _git_checkout
+fi
