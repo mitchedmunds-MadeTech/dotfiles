@@ -1,90 +1,102 @@
 #!/usr/bin/env bash
-# Install or update dotfiles by symlinking each package into $HOME via GNU stow.
-# Existing files at target paths are moved to ~/.dotfiles-backup-<timestamp>/
-# rather than overwritten.
+# Install or update dotfiles by symlinking each package's files into $HOME.
+#
+#   ./install.sh               core packages; Claude ones only if Claude Code is present
+#   ./install.sh --claude      also link the Claude Code + ccstatusline config
+#   ./install.sh --no-claude   never link them
+#
+# Works on macOS and Linux (apt, dnf, yum or none) with no sudo and no GNU stow:
+# every file is linked individually, so directories such as ~/.ssh or ~/.claude
+# stay real directories and nothing a tool writes there lands in this repo.
+# Existing files at target paths are moved to ~/.dotfiles-backup-<timestamp>/.
+# Runs under macOS's bash 3.2.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGES=(git zsh ssh claude ccstatusline ohmyposh vim)
+CORE_PACKAGES="git zsh ssh vim ohmyposh"
+CLAUDE_PACKAGES="claude ccstatusline"
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 OS="$(uname -s)"
+CLAUDE="${DOTFILES_CLAUDE:-auto}"
 
 log()  { printf '[dotfiles] %s\n' "$*"; }
+warn() { printf '[dotfiles] warning: %s\n' "$*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-ensure_tool() {
-    local tool="$1" brew_pkg="${2:-$1}" apt_pkg="${3:-$1}"
-    if have "$tool"; then return; fi
+usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; }
+
+for arg in "$@"; do
+    case "$arg" in
+        --claude)    CLAUDE=1 ;;
+        --no-claude) CLAUDE=0 ;;
+        -h|--help)   usage; exit 0 ;;
+        *) warn "unknown argument: $arg"; usage; exit 1 ;;
+    esac
+done
+
+if [ "$CLAUDE" = "auto" ]; then
+    if have claude || [ -d "$HOME/.claude" ]; then CLAUDE=1; else CLAUDE=0; fi
+fi
+PACKAGES="$CORE_PACKAGES"
+[ "$CLAUDE" = "1" ] && PACKAGES="$PACKAGES $CLAUDE_PACKAGES"
+
+# Optional extras. A failure here is a warning, never a reason to skip linking.
+install_oh_my_posh() {
+    have oh-my-posh && return 0
     case "$OS" in
-        Darwin)
-            have brew || { log "brew not found; install Homebrew first: https://brew.sh"; exit 1; }
-            log "Installing $brew_pkg via brew"
-            brew install "$brew_pkg"
-            ;;
+        Darwin) have brew && brew install oh-my-posh ;;
         Linux)
-            if have apt-get; then
-                log "Installing $apt_pkg via apt-get"
-                sudo apt-get update -qq
-                sudo apt-get install -y "$apt_pkg"
-            else
-                log "Unsupported Linux distro; install '$tool' manually"
-                exit 1
-            fi
+            have curl || { warn "curl not found; skipping oh-my-posh"; return 1; }
+            # The installer refuses a target directory that does not exist yet.
+            mkdir -p "$HOME/.local/bin"
+            curl -fsSL https://ohmyposh.dev/install.sh | bash -s -- -d "$HOME/.local/bin"
             ;;
-        *) log "Unsupported OS: $OS"; exit 1 ;;
     esac
 }
 
 install_atuin() {
-    # Opt-in: re-enable with `INSTALL_ATUIN=1 ./install.sh`.
-    [ "${INSTALL_ATUIN:-0}" = "1" ] || return
-    if have atuin; then return; fi
+    # Opt-in: `INSTALL_ATUIN=1 ./install.sh`.
+    [ "${INSTALL_ATUIN:-0}" = "1" ] || return 0
+    have atuin && return 0
     case "$OS" in
-        Darwin) brew install atuin ;;
+        Darwin) have brew && brew install atuin ;;
         Linux)  curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh ;;
     esac
 }
 
-install_oh_my_posh() {
-    if have oh-my-posh; then return; fi
-    case "$OS" in
-        Darwin) brew install oh-my-posh ;;
-        Linux)  curl -s https://ohmyposh.dev/install.sh | bash -s -- -d "$HOME/.local/bin" ;;
-    esac
-}
-
-# Back up any existing real file/dir at a target path before stow runs.
-# Stale symlinks pointing somewhere other than DOTFILES_DIR are removed.
-backup_conflicts() {
-    local pkg target_rel target backed_up=0
-    for pkg in "${PACKAGES[@]}"; do
-        while IFS= read -r -d '' src_file; do
-            target_rel="${src_file#"$DOTFILES_DIR/$pkg/"}"
-            target="$HOME/$target_rel"
-            if [[ -L "$target" ]]; then
-                if [[ "$(readlink "$target")" != "$src_file" ]]; then
-                    rm "$target"
-                fi
-            elif [[ -e "$target" ]]; then
-                mkdir -p "$(dirname "$BACKUP_DIR/$target_rel")"
-                mv "$target" "$BACKUP_DIR/$target_rel"
-                backed_up=1
-            fi
-        done < <(find "$DOTFILES_DIR/$pkg" -type f -print0)
-    done
-    if [[ $backed_up -eq 1 ]]; then
-        log "Existing files moved to $BACKUP_DIR"
+# Link one file, backing up whatever real file or foreign link is in the way.
+link_file() {
+    local src="$1" rel="$2" target="$HOME/$2"
+    if [ "$target" -ef "$src" ]; then
+        return 0
     fi
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        mkdir -p "$(dirname "$BACKUP_DIR/$rel")"
+        mv "$target" "$BACKUP_DIR/$rel"
+        log "backed up ~/$rel"
+    fi
+    mkdir -p "$(dirname "$target")"
+    ln -s "$src" "$target"
 }
 
-ensure_tool stow stow stow
-install_atuin
-install_oh_my_posh
+link_package() {
+    local pkg="$1" src rel
+    while IFS= read -r -d '' src; do
+        rel="${src#"$DOTFILES_DIR/$pkg/"}"
+        link_file "$src" "$rel"
+    done < <(find "$DOTFILES_DIR/$pkg" -type f ! -name .DS_Store -print0)
+}
 
-backup_conflicts
+mkdir -p "$HOME/.local/bin"
+install_oh_my_posh || warn "oh-my-posh not installed; the prompt falls back to the default"
+install_atuin || warn "atuin not installed"
 
-cd "$DOTFILES_DIR"
-log "Stowing: ${PACKAGES[*]}"
-stow -v -t "$HOME" "${PACKAGES[@]}"
+log "Linking: $PACKAGES"
+for pkg in $PACKAGES; do
+    link_package "$pkg"
+done
+chmod 700 "$HOME/.ssh" 2>/dev/null || true
 
-log "Done. Open a new shell or run: exec zsh"
+[ -d "$BACKUP_DIR" ] && log "Replaced files are in $BACKUP_DIR"
+[ "$CLAUDE" = "1" ] || log "Skipped Claude config (pass --claude to link it)"
+log "Done. Open a new shell, or run: exec \"\$SHELL\" -l"
