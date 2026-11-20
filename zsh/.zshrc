@@ -1,18 +1,12 @@
-# Used this guide: https://medium.com/codex/how-and-why-you-should-split-your-bashrc-or-zshrc-files-285e5cc3c843
-# Settings managed in zshrc folder
+# Interactive zsh. Settings shared with bash live in ~/.config/shell/*.sh;
+# zsh-only ones in ~/.config/shell/zsh/*.zsh.
+# Split inspired by https://medium.com/codex/how-and-why-you-should-split-your-bashrc-or-zshrc-files-285e5cc3c843
 autoload -U +X compinit && compinit
 autoload -U +X bashcompinit && bashcompinit
 setopt interactivecomments
 
-for FILE in ~/zshrc/**/*; do
-    source $FILE
+DOTFILES_SHELL=zsh
+for FILE in ~/.config/shell/*.sh(N) ~/.config/shell/functions/*.sh(N) ~/.config/shell/zsh/*.zsh(N); do
+    source "$FILE"
 done
-
-unset LESS;
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-# mise: per-directory tool versions from mise.toml, ~/.config/mise as the default
-[[ -x /opt/homebrew/bin/mise ]] && eval "$(/opt/homebrew/bin/mise activate zsh)"
+unset FILE

@@ -1,17 +1,19 @@
-[includeIf "gitdir:~/git-worktrees/work/"]
-    path = "~/.config/git/mitchedmunds-MadeTech.config"
+# Identity follows a repo's remote URL, not where it sits on disk, so clones
+# anywhere (a devcontainer's /workspaces, a fresh cloud workspace) behave alike.
+# Work is the default; repos under the personal GitHub account switch over.
+# Matches the scp form (git@host:owner/repo) and URL forms (https://, ssh://).
+[include]
+    path = ~/.config/git/mitchedmunds-MadeTech.config
+[includeIf "hasconfig:remote.*.url:*:mitches-got-glitches/**"]
+    path = ~/.config/git/mitches-got-glitches.config
+[includeIf "hasconfig:remote.*.url:**/mitches-got-glitches/**"]
+    path = ~/.config/git/mitches-got-glitches.config
 
-[includeIf "gitdir:/workspaces/"]
-    path = "~/.config/git/mitchedmunds-MadeTech.config"
-
-[includeIf "gitdir:~/dotfiles/"]
-    path = "~/.config/git/mitchedmunds-MadeTech.config"
-
-[includeIf "gitdir:~/git-worktrees/mitches-got-glitches/"]
-    path = "~/.config/git/mitches-got-glitches.config"
-
-[core]
-	excludesFile = ~/.gitignore
+# Personal repos go through the github.com-personal ssh alias, which presents
+# the personal key. Set here rather than in the personal config, so it applies
+# while cloning too, before the new repo has a remote to match on.
+[url "git@github.com-personal:mitches-got-glitches/"]
+    insteadOf = git@github.com:mitches-got-glitches/
 
 [init]
 	defaultBranch = main
@@ -86,3 +88,8 @@
     }; f"
     # Delete every branch `gone` lists. Pass a target as $1 to override.
     prune-gone = "!f() { git gone \"$@\" | xargs -r git branch -D; }; f"
+
+# Machine-specific overrides (another identity, a credential helper, extra
+# includeIf rules). Untracked; last, so it wins.
+[include]
+    path = ~/.gitconfig.local

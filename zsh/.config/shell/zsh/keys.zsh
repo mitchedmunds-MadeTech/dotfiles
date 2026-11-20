@@ -18,3 +18,5 @@ bindkey '\e' kill-whole-line
 # Undo and Redo (Windows style but using Option)
 bindkey "^[z" undo
 bindkey "^[y" redo
+
+setopt no_complete_aliases
