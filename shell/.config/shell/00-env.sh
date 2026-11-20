@@ -26,12 +26,10 @@ _dotfiles_path_prepend "$HOME/.local/bin"
 # GNU coreutils from Homebrew, when installed, over the BSD ones.
 [ -n "${HOMEBREW_PREFIX:-}" ] && _dotfiles_path_prepend "$HOMEBREW_PREFIX/opt/coreutils/libexec/gnubin"
 
-# 1Password SSH agent (macOS host only).
-# In devcontainers VS Code forwards $SSH_AUTH_SOCK itself, so this guard
-# skips and we use the forwarded socket.
-_op_sock="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-[ -S "$_op_sock" ] && export SSH_AUTH_SOCK="$_op_sock"
-unset _op_sock
+# 1Password SSH agent. install.sh links the macOS socket to the Linux path, so
+# one check covers both. In devcontainers neither exists and the socket VS Code
+# forwards in $SSH_AUTH_SOCK is left alone.
+[ -S "$HOME/.1password/agent.sock" ] && export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
 
 # Node via nvm, when installed.
 export NVM_DIR="$HOME/.nvm"

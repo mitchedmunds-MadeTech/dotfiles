@@ -98,6 +98,17 @@ remove_legacy_links() {
     find "$HOME/zshrc" -depth -type d -empty -exec rmdir {} \; 2>/dev/null || true
 }
 
+# 1Password's agent socket lives at an awkward path on macOS. Give it the same
+# path it has on Linux so ssh/config and env.sh only need to know one.
+link_1password_socket() {
+    local mac_sock="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    [ "$OS" = "Darwin" ] || return 0
+    [ -e "$HOME/.1password/agent.sock" ] && return 0
+    [ -d "$(dirname "$mac_sock")" ] || return 0
+    mkdir -p "$HOME/.1password"
+    ln -sfn "$mac_sock" "$HOME/.1password/agent.sock"
+}
+
 mkdir -p "$HOME/.local/bin"
 install_oh_my_posh || warn "oh-my-posh not installed; the prompt falls back to the default"
 install_atuin || warn "atuin not installed"
@@ -107,6 +118,7 @@ for pkg in $PACKAGES; do
     link_package "$pkg"
 done
 remove_legacy_links
+link_1password_socket
 chmod 700 "$HOME/.ssh" 2>/dev/null || true
 
 [ -d "$BACKUP_DIR" ] && log "Replaced files are in $BACKUP_DIR"
